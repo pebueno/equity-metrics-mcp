@@ -6,7 +6,6 @@ the question, and renders the answer with its ordered tool trace.
 
 import datetime as dt
 import logging
-from functools import lru_cache
 from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -17,7 +16,9 @@ from equity_metrics.ai_gateway.errors import GatewayError
 from equity_metrics.ai_gateway.gateway import AiGateway, GatewayLimits
 from equity_metrics.ai_gateway.providers import build_provider
 from equity_metrics.ai_gateway.tool_client import McpToolClient
-from equity_metrics.config import Settings, get_settings
+from equity_metrics.api.deps import get_gateway
+from equity_metrics.config import Settings
+from equity_metrics.db.session import build_engine, build_session_factory
 from equity_metrics.mcp_server.server import create_server
 
 logger = logging.getLogger("equity_metrics.api.chat")
@@ -67,18 +68,16 @@ class ChatResponse(BaseModel):
     data: list[ToolPayloadItem]
 
 
-@lru_cache
-def _gateway() -> AiGateway:
-    """Build the gateway once; it holds the MCP server and the provider."""
-    settings = get_settings()
-    return build_gateway(settings)
-
-
 def build_gateway(settings: Settings) -> AiGateway:
-    """Assemble a gateway from settings, for the app and for tests alike."""
+    """Assemble a gateway from settings, for the app and for tests alike.
+
+    The MCP server is given a session factory built from these settings, so the
+    tools read the database this application was configured with.
+    """
+    session_factory = build_session_factory(build_engine(settings.database_url))
     return AiGateway(
         provider=build_provider(settings),
-        tool_client=McpToolClient(create_server()),
+        tool_client=McpToolClient(create_server(session_factory)),
         limits=GatewayLimits(
             max_tool_iterations=settings.llm_max_tool_iterations,
             call_timeout_seconds=settings.llm_timeout_seconds,
@@ -86,11 +85,6 @@ def build_gateway(settings: Settings) -> AiGateway:
             max_retries=settings.llm_max_retries,
         ),
     )
-
-
-def get_gateway() -> AiGateway:
-    """Dependency seam so tests can serve the endpoint from their own gateway."""
-    return _gateway()
 
 
 @router.post("/chat", response_model=ChatResponse)
