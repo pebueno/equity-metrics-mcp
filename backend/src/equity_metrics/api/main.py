@@ -4,6 +4,8 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
+from equity_metrics.api.errors import register_error_handlers
+from equity_metrics.api.routes import router
 from equity_metrics.config import Settings, get_settings
 
 
@@ -29,6 +31,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     def health() -> HealthResponse:
         return HealthResponse(status="ok", app_env=resolved.app_env)
 
+    register_error_handlers(app)
+    app.include_router(router)
     return app
 
 

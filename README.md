@@ -83,14 +83,40 @@ Checks:
 npm run format:check && npm run lint && npm run test && npm run build
 ```
 
+## HTTP API
+
+All endpoints read through the shared `kpi_service` layer, which the MCP tools
+will also use, so validation and SQL exist in one place.
+
+| Endpoint | Purpose |
+| --- | --- |
+| `GET /api/health` | Liveness. |
+| `GET /api/sectors` | Sectors with company counts. |
+| `GET /api/companies?query=&sector=&limit=` | Bounded company search. |
+| `GET /api/companies/{company}/kpis` | Resolved company and the KPIs it reports. |
+| `GET /api/companies/{company}/kpis/{kpi}/estimates?periods=` | Historical estimates, chronological. |
+| `GET /api/companies/{company}/kpis/{kpi}/qtd` | Latest QTD snapshot, by greatest `as_of`. |
+
+`{company}` accepts a ticker or an exact company name. Resolution is exact
+ticker first, then exact normalized name; a substring match is never promoted
+to a resolution, so the caller is never silently given the wrong company.
+
+Recoverable failures return a stable body — `code`, `message`,
+`normalized_query`, and up to five `suggestions` — with `404` for unknown
+entities, `409` for input resembling several known entities, and `400` for a
+malformed fiscal period.
+
+Estimate values are JSON strings so exact decimal precision survives the wire,
+and every value travels with its unit.
+
 ## Status
 
 | Milestone | State |
 | --- | --- |
 | 0 — Bootstrap and conventions | Done |
 | 1 — Data import and schema | Done |
-| 2 — Shared KPI services and HTTP API | Next |
-| 3 — MCP server and audit trail | Pending |
+| 2 — Shared KPI services and HTTP API | Done |
+| 3 — MCP server and audit trail | Next |
 | 4 — AI gateway | Pending |
 | 5 — Investor chat UI | Pending |
 | 6 — Integration, documentation, and handoff | Pending |
