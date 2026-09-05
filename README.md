@@ -196,10 +196,32 @@ gateway refuses to build rather than falling back silently.
 ### Chat endpoint
 
 `POST /api/chat` takes `{"question": "..."}` and returns the answer, a request
-ID, the provider, model, and prompt version, and the ordered tool trace — each
-entry with its index, tool, sanitized arguments, status, error code, and
-duration. The request ID is the correlation ID on the `mcp_tool_calls` rows the
-answer produced, so the visible trace and the audit trail line up.
+ID, the provider, model, and prompt version, the ordered tool trace — each entry
+with its index, tool, sanitized arguments, status, error code, and duration —
+and `data`, the structured payloads of the successful tool calls. The request ID
+is the correlation ID on the `mcp_tool_calls` rows the answer produced, so the
+visible trace and the audit trail line up.
+
+`data` exists so the UI can render the figures as tables rather than parsing
+them back out of prose. The sentence and the table come from the same tool call
+and cannot disagree.
+
+## Chat UI
+
+One screen, no navigation: header, suggested prompts, conversation, composer.
+Each answer carries the prose reply, a data panel, and a collapsed activity
+panel.
+
+- Values are shown with their units, dates and figures in tabular numerals so
+  columns line up, and quarter-to-date results carry a visible QTD badge that
+  distinguishes them from history.
+- The activity panel expands to every tool call in order with its sanitized
+  arguments, outcome or error code, and duration, plus the request ID, model,
+  and prompt version. A recovered failure stays visible there even though it is
+  kept out of the answer.
+- Enter submits, Shift+Enter adds a line. Loading, service failure, and network
+  failure each have their own state, and wide tables scroll inside their card so
+  the page never scrolls sideways.
 
 ## Status
 
@@ -210,5 +232,5 @@ answer produced, so the visible trace and the audit trail line up.
 | 2 — Shared KPI services and HTTP API | Done |
 | 3 — MCP server and audit trail | Done |
 | 4 — AI gateway | Done |
-| 5 — Investor chat UI | Next |
-| 6 — Integration, documentation, and handoff | Pending |
+| 5 — Investor chat UI | Done |
+| 6 — Integration, documentation, and handoff | Next |
