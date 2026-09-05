@@ -1,0 +1,39 @@
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-equity}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-equity}
+      POSTGRES_DB: ${POSTGRES_DB:-equity_metrics}
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+  api:
+    build: ./backend
+    environment:
+      APP_ENV: ${APP_ENV:-local}
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-equity}:${POSTGRES_PASSWORD:-equity}@db:5432/${POSTGRES_DB:-equity_metrics}
+      LLM_PROVIDER: ${LLM_PROVIDER:-mock}
+      LLM_MODEL: ${LLM_MODEL:-mock-model}
+      LLM_API_KEY: ${LLM_API_KEY:-}
+    depends_on:
+      - db
+    ports:
+      - "8000:8000"
+
+  web:
+    build: ./web
+    environment:
+      VITE_API_PROXY: http://api:8000
+    depends_on:
+      - api
+    ports:
+      - "5173:5173"
+    volumes:
+      - /app/node_modules
+
+volumes:
+  postgres_data:

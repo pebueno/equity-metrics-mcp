@@ -1,0 +1,50 @@
+/* Calm neutral base with a single restrained accent, shared by every screen. */
+:root {
+  --surface: #f7f7f5;
+  --surface-raised: #ffffff;
+  --border: #e2e1dd;
+  --text: #1c1b19;
+  --text-muted: #6b6963;
+  --accent: #1f5f4b;
+  --font-sans: 'Inter', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --font-numeric: 'SF Mono', 'Cascadia Mono', 'Consolas', monospace;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: var(--surface);
+  color: var(--text);
+  font-family: var(--font-sans);
+}
+
+.app-shell {
+  max-width: 56rem;
+  margin: 0 auto;
+  padding: 2rem 1.25rem;
+}
+
+.app-header h1 {
+  margin: 0;
+  font-size: 1.5rem;
+  letter-spacing: -0.01em;
+}
+
+.app-header p {
+  margin: 0.375rem 0 0;
+  color: var(--text-muted);
+}
+
+.status-line {
+  margin-top: 1.5rem;
+  padding: 0.75rem 1rem;
+  background: var(--surface-raised);
+  border: 1px solid var(--border);
+  border-radius: 0.5rem;
+  color: var(--text-muted);
+  font-family: var(--font-numeric);
+  font-size: 0.875rem;
+}
