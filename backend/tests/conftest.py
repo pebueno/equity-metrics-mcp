@@ -30,6 +30,12 @@ EXPECTED_ESTIMATE_COUNT = 2000
 
 
 @pytest.fixture(scope="session")
+def anyio_backend() -> str:
+    """Run async tests on asyncio only; the MCP server needs no second backend."""
+    return "asyncio"
+
+
+@pytest.fixture(scope="session")
 def engine() -> Iterator[Engine]:
     """Create the test database and schema once per test session."""
     url = os.environ.get("TEST_DATABASE_URL", DEFAULT_TEST_DATABASE_URL)
