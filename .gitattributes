@@ -1,0 +1,5 @@
+# Files consumed by Linux containers must keep LF endings, or a Windows
+# checkout produces `#!/bin/sh\r` and the image fails to start.
+*.sh text eol=lf
+Dockerfile text eol=lf
+docker-entrypoint.sh text eol=lf
