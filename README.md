@@ -42,6 +42,7 @@ cd backend
 python -m venv .venv
 .venv/Scripts/activate        # macOS/Linux: source .venv/bin/activate
 pip install -e ".[dev]"
+alembic upgrade head          # needs PostgreSQL: docker compose up -d db
 uvicorn equity_metrics.api.main:app --reload
 ```
 
@@ -50,6 +51,23 @@ Checks:
 ```bash
 ruff format . && ruff check . && mypy && pytest
 ```
+
+Tests that need PostgreSQL skip with an explanatory message when no server is
+reachable, so `pytest` is always runnable. They use a separate
+`equity_metrics_test` database, created automatically, and never touch
+development data. Override the server with `TEST_DATABASE_URL`.
+
+### Importing the dataset
+
+```bash
+cd backend
+equity-import ../kpi_sample_2000__282_29__281_29.csv
+```
+
+The importer validates each row, rejects malformed ones without stopping, and
+upserts on the source identity `(company, KPI, period, estimate_type, as_of)`.
+Running it twice leaves the database unchanged. Add `--strict` to exit non-zero
+when any row is rejected, or `--database-url` to target another database.
 
 ### Web
 
@@ -70,8 +88,8 @@ npm run format:check && npm run lint && npm run test && npm run build
 | Milestone | State |
 | --- | --- |
 | 0 — Bootstrap and conventions | Done |
-| 1 — Data import and schema | Next |
-| 2 — Shared KPI services and HTTP API | Pending |
+| 1 — Data import and schema | Done |
+| 2 — Shared KPI services and HTTP API | Next |
 | 3 — MCP server and audit trail | Pending |
 | 4 — AI gateway | Pending |
 | 5 — Investor chat UI | Pending |

@@ -21,6 +21,9 @@ dev = [
     "ruff>=0.6",
 ]
 
+[project.scripts]
+equity-import = "equity_metrics.importer.cli:main"
+
 [build-system]
 requires = ["setuptools>=68"]
 build-backend = "setuptools.build_meta"
