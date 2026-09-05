@@ -16,6 +16,7 @@ from sqlalchemy.orm import Session
 
 from equity_metrics.db.base import Base
 from equity_metrics.db.models import Company, Estimate, KpiDefinition, McpToolCall, Sector
+from equity_metrics.importer.csv_import import import_csv
 
 DEFAULT_TEST_DATABASE_URL = "postgresql+psycopg://equity:equity@localhost:5432/equity_metrics_test"
 SKIP_REASON = (
@@ -25,6 +26,7 @@ SKIP_REASON = (
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 SAMPLE_CSV = REPO_ROOT / "kpi_sample_2000__282_29__281_29.csv"
+EXPECTED_ESTIMATE_COUNT = 2000
 
 
 @pytest.fixture(scope="session")
@@ -75,3 +77,20 @@ def _ensure_database_exists(url: str) -> None:
             connection.execute(text(f'CREATE DATABASE "{database_name}"'))
     finally:
         admin.dispose()
+
+
+@pytest.fixture
+def seeded_session(engine: Engine) -> Iterator[Session]:
+    """Yield a session over the imported sample dataset.
+
+    The data is re-imported only when a previous test emptied the database, so
+    read-only suites pay the import cost at most once.
+    """
+    with Session(engine, expire_on_commit=False) as db_session:
+        if db_session.query(Estimate).count() != EXPECTED_ESTIMATE_COUNT:
+            for model in (Estimate, Company, KpiDefinition, Sector):
+                db_session.query(model).delete()
+            db_session.commit()
+            import_csv(SAMPLE_CSV, db_session)
+            db_session.commit()
+        yield db_session
