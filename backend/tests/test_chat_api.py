@@ -76,6 +76,26 @@ def test_answers_a_question_with_its_tool_trace(client: TestClient) -> None:
     ]
 
 
+def test_returns_the_structured_data_behind_the_answer(client: TestClient) -> None:
+    response = client.post("/api/chat", json={"question": "What is ACME's QTD ASP?"})
+
+    data = response.json()["data"]
+    assert [item["tool"] for item in data] == ["get_qtd_estimate"]
+    # The table the reader sees comes from the same call as the sentence.
+    assert data[0]["data"]["value"] == "164.22"
+    assert data[0]["data"]["as_of"] == "2026-03-15"
+    assert data[0]["data"]["unit"] == "$"
+
+
+def test_omits_failed_tool_calls_from_the_data(client: TestClient) -> None:
+    response = client.post("/api/chat", json={"question": "SHIELD quarter-to-date units sold"})
+
+    body = response.json()
+    assert len(body["trace"]) == 2
+    assert [item["tool"] for item in body["data"]] == ["get_qtd_estimate"]
+    assert body["data"][0]["data"]["company"]["ticker"] == "SHLD"
+
+
 def test_trace_is_ordered_and_reports_recoverable_tool_errors(client: TestClient) -> None:
     response = client.post("/api/chat", json={"question": "SHIELD quarter-to-date units sold"})
 

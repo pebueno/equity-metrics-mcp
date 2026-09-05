@@ -45,6 +45,13 @@ class ToolTraceItem(BaseModel):
     truncated: bool = False
 
 
+class ToolPayloadItem(BaseModel):
+    """A structured tool result the UI renders as a table."""
+
+    tool: str
+    data: dict[str, Any]
+
+
 class ChatResponse(BaseModel):
     """The answer plus everything needed to inspect how it was produced."""
 
@@ -57,6 +64,7 @@ class ChatResponse(BaseModel):
     duration_ms: int
     created_at: dt.datetime
     trace: list[ToolTraceItem]
+    data: list[ToolPayloadItem]
 
 
 @lru_cache
@@ -123,4 +131,5 @@ def _render(response: AgentResponse) -> ChatResponse:
             )
             for entry in response.trace
         ],
+        data=[ToolPayloadItem(tool=item.tool, data=item.data) for item in response.data],
     )

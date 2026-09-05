@@ -8,10 +8,12 @@ the MCP tools.
 
 import asyncio
 import datetime as dt
+import json
 import logging
 import time
 import uuid
 from dataclasses import dataclass
+from typing import Any
 
 from equity_metrics.ai_gateway.contracts import (
     AgentResponse,
@@ -21,6 +23,7 @@ from equity_metrics.ai_gateway.contracts import (
     ProviderCompletion,
     ToolCallRequest,
     ToolCallResult,
+    ToolPayload,
     ToolResultTurn,
     ToolSpec,
     ToolTrace,
@@ -74,7 +77,7 @@ class AiGateway:
         with correlation_scope(request_id):
             try:
                 async with asyncio.timeout(self._limits.total_timeout_seconds):
-                    answer, trace, usage, iterations = await self._run_loop(question)
+                    answer, trace, data, usage, iterations = await self._run_loop(question)
             except TimeoutError as exc:
                 raise GatewayTimeoutError(
                     f"Answering exceeded the {self._limits.total_timeout_seconds:g}s budget."
@@ -87,17 +90,21 @@ class AiGateway:
             model=self._provider.model,
             prompt_version=PROMPT_VERSION,
             trace=trace,
+            data=data,
             usage=usage,
             iterations=iterations,
             duration_ms=max(0, round((time.perf_counter() - started) * 1000)),
             created_at=dt.datetime.now(dt.UTC),
         )
 
-    async def _run_loop(self, question: str) -> tuple[str, tuple[ToolTrace, ...], Usage, int]:
+    async def _run_loop(
+        self, question: str
+    ) -> tuple[str, tuple[ToolTrace, ...], tuple[ToolPayload, ...], Usage, int]:
         """Alternate provider turns and tool calls until an answer or a limit."""
         specs = await self._tools.list_specs()
         turns: tuple[Turn, ...] = (UserTurn(text=question),)
         trace: list[ToolTrace] = []
+        data: list[ToolPayload] = []
         usage = Usage()
 
         for iteration in range(1, self._limits.max_tool_iterations + 1):
@@ -105,14 +112,14 @@ class AiGateway:
             usage = usage.plus(completion.usage)
 
             if completion.text is not None:
-                return completion.text, tuple(trace), usage, iteration
+                return completion.text, tuple(trace), tuple(data), usage, iteration
 
             if not completion.tool_calls:
                 logger.warning("provider returned neither text nor tool calls; ending the loop")
-                return "", tuple(trace), usage, iteration
+                return "", tuple(trace), tuple(data), usage, iteration
 
             turns += (AssistantTurn(tool_calls=completion.tool_calls),)
-            results = await self._invoke(completion.tool_calls, trace)
+            results = await self._invoke(completion.tool_calls, trace, data)
             turns += (ToolResultTurn(results=results),)
 
         raise ToolIterationLimitError(
@@ -144,7 +151,10 @@ class AiGateway:
                     await asyncio.sleep(delay)
 
     async def _invoke(
-        self, calls: tuple[ToolCallRequest, ...], trace: list[ToolTrace]
+        self,
+        calls: tuple[ToolCallRequest, ...],
+        trace: list[ToolTrace],
+        data: list[ToolPayload],
     ) -> tuple[ToolCallResult, ...]:
         """Run the requested tool calls in order, recording each in the trace."""
         results: list[ToolCallResult] = []
@@ -161,6 +171,10 @@ class AiGateway:
                     truncated=outcome.truncated,
                 )
             )
+            if not outcome.is_error and not outcome.truncated:
+                payload = _parsed(outcome.payload)
+                if payload is not None:
+                    data.append(ToolPayload(tool=call.name, data=payload))
             results.append(
                 ToolCallResult(
                     id=call.id,
@@ -172,6 +186,15 @@ class AiGateway:
                 )
             )
         return tuple(results)
+
+
+def _parsed(payload: str) -> dict[str, Any] | None:
+    """Decode a tool payload for the UI, ignoring anything not a JSON object."""
+    try:
+        decoded = json.loads(payload)
+    except json.JSONDecodeError:
+        return None
+    return decoded if isinstance(decoded, dict) else None
 
 
 def _sanitized(arguments: dict[str, object]) -> dict[str, object]:

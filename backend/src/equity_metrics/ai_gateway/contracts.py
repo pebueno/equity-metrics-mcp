@@ -133,6 +133,18 @@ class ToolTrace:
 
 
 @dataclass(frozen=True, slots=True)
+class ToolPayload:
+    """A successful tool result, kept so the UI can render the data itself.
+
+    The answer text and this payload come from the same tool call, so the table
+    a reader sees and the sentence they read cannot disagree.
+    """
+
+    tool: str
+    data: dict[str, Any]
+
+
+@dataclass(frozen=True, slots=True)
 class ChatContext:
     """Caller-supplied context for one question."""
 
@@ -149,6 +161,7 @@ class AgentResponse:
     model: str
     prompt_version: str
     trace: tuple[ToolTrace, ...]
+    data: tuple[ToolPayload, ...]
     usage: Usage
     iterations: int
     duration_ms: int
