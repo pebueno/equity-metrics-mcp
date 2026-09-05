@@ -23,8 +23,11 @@ class Settings(BaseSettings):
     llm_provider: str = "mock"
     llm_model: str = "mock-model"
     llm_api_key: str | None = None
+    # Per-provider-call timeout; the whole answer has its own larger budget.
     llm_timeout_seconds: float = 30.0
+    llm_total_timeout_seconds: float = 90.0
     llm_max_tool_iterations: int = 6
+    llm_max_retries: int = 2
 
     cors_allow_origins: tuple[str, ...] = ("http://localhost:5173",)
 
