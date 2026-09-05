@@ -4,6 +4,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
+from equity_metrics.api.chat import router as chat_router
 from equity_metrics.api.errors import register_error_handlers
 from equity_metrics.api.routes import router
 from equity_metrics.config import Settings, get_settings
@@ -33,6 +34,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
     register_error_handlers(app)
     app.include_router(router)
+    app.include_router(chat_router)
     return app
 
 

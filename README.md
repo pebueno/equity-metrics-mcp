@@ -159,6 +159,48 @@ the tool, sanitized and bounded arguments, outcome, error code, duration, and a
 correlation ID shared by all calls made for a single question. Credential- and
 prompt-bearing argument names are redacted before storage.
 
+## AI gateway
+
+`backend/src/equity_metrics/ai_gateway/` isolates every provider concern behind
+one interface — `answer(question, context) -> AgentResponse` — so a future
+standalone deployment can keep the same contract. It is a module, not a service.
+
+The gateway never queries PostgreSQL. It reaches data only through the MCP
+tools, which keeps the database behind a single authoritative interface.
+
+Guardrails on every answer:
+
+| Guardrail | Setting | Default |
+| --- | --- | --- |
+| Tool iterations | `LLM_MAX_TOOL_ITERATIONS` | 6 |
+| Per-provider-call timeout | `LLM_TIMEOUT_SECONDS` | 30 |
+| Total answer budget | `LLM_TOTAL_TIMEOUT_SECONDS` | 90 |
+| Retries, transient faults only | `LLM_MAX_RETRIES` | 2 |
+| Tool response size | `MAX_TOOL_RESULT_CHARS` in code | 20,000 chars |
+
+A permanent provider failure is never retried, because a rejected request fails
+identically the second time.
+
+### Providers
+
+`LLM_PROVIDER=mock` is the default and needs no credential: it plans a tool
+sequence from the question, recovers from a recoverable tool error by retrying
+with the suggestion the tool offered, and writes its answer only from what the
+tools returned. The same question always produces the same trace and the same
+words, so the whole test suite runs offline.
+
+`LLM_PROVIDER=anthropic` enables the live adapter. It requires `LLM_API_KEY` and
+`pip install anthropic`, which is an optional dependency; without a key the
+gateway refuses to build rather than falling back silently.
+
+### Chat endpoint
+
+`POST /api/chat` takes `{"question": "..."}` and returns the answer, a request
+ID, the provider, model, and prompt version, and the ordered tool trace — each
+entry with its index, tool, sanitized arguments, status, error code, and
+duration. The request ID is the correlation ID on the `mcp_tool_calls` rows the
+answer produced, so the visible trace and the audit trail line up.
+
 ## Status
 
 | Milestone | State |
@@ -167,6 +209,6 @@ prompt-bearing argument names are redacted before storage.
 | 1 — Data import and schema | Done |
 | 2 — Shared KPI services and HTTP API | Done |
 | 3 — MCP server and audit trail | Done |
-| 4 — AI gateway | Next |
-| 5 — Investor chat UI | Pending |
+| 4 — AI gateway | Done |
+| 5 — Investor chat UI | Next |
 | 6 — Integration, documentation, and handoff | Pending |
