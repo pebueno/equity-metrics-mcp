@@ -109,6 +109,56 @@ malformed fiscal period.
 Estimate values are JSON strings so exact decimal precision survives the wire,
 and every value travels with its unit.
 
+## MCP server
+
+Four tools cover the natural agent workflow, all built on the same
+`kpi_service` layer the HTTP API uses.
+
+| Tool | Purpose |
+| --- | --- |
+| `search_companies(query, sector?)` | Candidates with canonical name, ticker, and sector. |
+| `list_company_kpis(ticker_or_company)` | Resolved company and the KPIs it reports, with units. |
+| `get_kpi_estimates(ticker, kpi, periods?)` | Historical estimates, chronological. |
+| `get_qtd_estimate(ticker, kpi)` | Latest QTD snapshot, by greatest `as_of`. |
+
+Run it over stdio:
+
+```bash
+cd backend
+equity-mcp
+```
+
+Register it with an MCP client, using absolute paths:
+
+```json
+{
+  "mcpServers": {
+    "equity-metrics": {
+      "command": "C:/path/to/equity-metrics-mcp/backend/.venv/Scripts/equity-mcp.exe",
+      "env": {
+        "DATABASE_URL": "postgresql+psycopg://equity:equity@localhost:5432/equity_metrics"
+      }
+    }
+  }
+}
+```
+
+On macOS or Linux the command is `.venv/bin/equity-mcp`. The database must be
+running and imported first.
+
+### Errors and auditing
+
+A recoverable failure is a tool *result* with `isError` set, never a protocol
+error, so an agent can correct itself and retry. The payload carries `code`
+(`unknown_company`, `ambiguous_company`, `unknown_kpi`, `ambiguous_kpi`,
+`invalid_period`, `no_data`), the normalized query, and up to five suggestions.
+
+Every call writes one `mcp_tool_calls` row in a `finally` path, through its own
+session so a rolled-back read cannot take the audit trail with it. The row holds
+the tool, sanitized and bounded arguments, outcome, error code, duration, and a
+correlation ID shared by all calls made for a single question. Credential- and
+prompt-bearing argument names are redacted before storage.
+
 ## Status
 
 | Milestone | State |
@@ -116,7 +166,7 @@ and every value travels with its unit.
 | 0 — Bootstrap and conventions | Done |
 | 1 — Data import and schema | Done |
 | 2 — Shared KPI services and HTTP API | Done |
-| 3 — MCP server and audit trail | Next |
-| 4 — AI gateway | Pending |
+| 3 — MCP server and audit trail | Done |
+| 4 — AI gateway | Next |
 | 5 — Investor chat UI | Pending |
 | 6 — Integration, documentation, and handoff | Pending |
