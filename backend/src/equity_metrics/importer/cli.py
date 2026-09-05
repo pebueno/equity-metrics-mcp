@@ -8,6 +8,7 @@ from pathlib import Path
 from equity_metrics.config import get_settings
 from equity_metrics.db.session import build_engine, session_scope
 from equity_metrics.importer.csv_import import ImportReport, MissingColumnsError, import_csv
+from equity_metrics.logging import configure_logging
 
 logger = logging.getLogger("equity_metrics.importer")
 
@@ -31,7 +32,7 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
 
     settings = get_settings()
-    logging.basicConfig(level=settings.log_level, format="%(levelname)s %(name)s %(message)s")
+    configure_logging(settings.log_level)
 
     if not args.csv_path.is_file():
         logger.error("CSV file not found: %s", args.csv_path)

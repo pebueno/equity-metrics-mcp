@@ -7,7 +7,6 @@ and reaches PostgreSQL only through the shared KPI services.
 server the project targets, on the current major version of the official SDK.
 """
 
-import logging
 from collections.abc import Callable
 from typing import Any
 
@@ -16,6 +15,7 @@ from sqlalchemy.orm import Session
 
 from equity_metrics.config import get_settings
 from equity_metrics.db.session import build_engine, build_session_factory
+from equity_metrics.logging import configure_logging
 from equity_metrics.mcp_server.tools import register_tools
 
 INSTRUCTIONS = """\
@@ -47,7 +47,7 @@ def main() -> None:
     """Run the server over stdio for a local MCP client."""
     settings = get_settings()
     # stdout carries the protocol, so logs must go to stderr only.
-    logging.basicConfig(level=settings.log_level, format="%(levelname)s %(name)s %(message)s")
+    configure_logging(settings.log_level)
     create_server().run(transport="stdio")
 
 
