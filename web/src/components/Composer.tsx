@@ -1,4 +1,4 @@
-import { useRef, type FormEvent, type KeyboardEvent } from 'react';
+import type { FormEvent, KeyboardEvent } from 'react';
 
 const MAX_QUESTION_LENGTH = 500;
 
@@ -16,7 +16,6 @@ interface ComposerProps {
  * reader expects from a chat box.
  */
 export default function Composer({ value, onChange, onSubmit, pending }: ComposerProps) {
-  const textarea = useRef<HTMLTextAreaElement>(null);
   const canSubmit = value.trim().length > 0 && !pending;
 
   function handleSubmit(event: FormEvent) {
@@ -42,7 +41,6 @@ export default function Composer({ value, onChange, onSubmit, pending }: Compose
       </label>
       <textarea
         id="question"
-        ref={textarea}
         className="composer__input"
         rows={2}
         maxLength={MAX_QUESTION_LENGTH}

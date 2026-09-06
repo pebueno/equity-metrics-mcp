@@ -1,19 +1,5 @@
 import type { ChatResponse } from './types';
 
-export interface HealthResponse {
-  status: string;
-  app_env: string;
-}
-
-/** Fetch API liveness; the UI uses it to show whether the backend is reachable. */
-export async function fetchHealth(): Promise<HealthResponse> {
-  const response = await fetch('/api/health');
-  if (!response.ok) {
-    throw new Error(`Health check failed with status ${response.status}`);
-  }
-  return (await response.json()) as HealthResponse;
-}
-
 /** Ask a question. Throws with a readable message so the UI can show the cause. */
 export async function askQuestion(question: string, signal?: AbortSignal): Promise<ChatResponse> {
   const response = await fetch('/api/chat', {
