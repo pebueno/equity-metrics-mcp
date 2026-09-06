@@ -20,6 +20,7 @@ snapshot date of its own.
 - [Chat UI](#chat-ui)
 - [Decisions](#decisions)
 - [LLM tool-calling failure modes](#llm-tool-calling-failure-modes)
+- [Security boundary between the model and the data](#security-boundary-between-the-model-and-the-data)
 - [Future improvements](#future-improvements)
 - [Use of AI tools](#use-of-ai-tools)
 
@@ -366,9 +367,100 @@ system guards against, and where the guard lives.
 | **Secrets in logs** — a prompt or key ends up in the audit table | Argument names matching credential or prompt patterns are redacted, and values are length-bounded, before storage. |
 | **Scope drift** — the model answers a narrower question than the one asked | A multi-company question is declined rather than answered for one company; a named fiscal period is passed to the tool rather than ignored. |
 
+## Security boundary between the model and the data
+
+The model is treated as an untrusted caller. It cannot reach the database, and
+the only thing it can do is invoke four read-only tools with validated
+arguments. That is a structural boundary rather than a prompt instruction: no
+wording in a system prompt is load-bearing for it.
+
+| Control | Where it lives |
+| --- | --- |
+| The model never composes a query | It emits tool names and arguments only. All SQL is in `db/repositories.py`, parameterized, and reached through the service layer. |
+| No general-purpose tool | Four task-shaped tools with small explicit fields. Nothing accepts an expression, a filter, or a fragment of SQL. `search_companies` takes a `query`, but it is a search string that reaches the database only as an escaped `LIKE` literal. |
+| Arguments validated before execution | Every tool argument is a typed field validated by the MCP SDK before the function body runs; a malformed call fails at the boundary. |
+| The tool surface is read-only | No tool writes, updates, or deletes. A fully jailbroken model cannot alter a single KPI value. The only write it can cause is its own audit row, whose contents are redacted and length-bounded. |
+| Injection through data is bounded | User text becomes an argument *value*, never an identifier or an operator, and `LIKE` wildcards are escaped so they match literally. |
+| Model output is never executed | Answers are rendered as text; figures come from the structured payload, not from parsing prose. React escapes by default and no HTML is injected. |
+| Blast radius is capped | Iteration ceiling, per-call and total timeouts, bounded retries, and a response-size limit, so a misbehaving loop is expensive in milliseconds rather than dollars. |
+| Credentials are confined | The API key is read from the environment and handed to the provider adapter, which is the only component that uses it. It never enters a prompt, a tool argument, a tool result, or an audit row. |
+| Every call is attributable | One audit row per tool call, with a correlation ID tying a question to everything it caused. |
+
+### Against the OWASP LLM Top 10
+
+| Risk | Position |
+| --- | --- |
+| **Prompt injection** | The system prompt is fixed and versioned, and user text only ever lands in validated argument values. The residual vector is *indirect* injection through retrieved content; it is low here because the corpus is curated numeric data, and the mitigation if that changes is below. |
+| **Sensitive information disclosure** | Audit arguments are redacted by key pattern and length-bounded. This dataset carries no personal data, so there is no PII policy to enforce yet. |
+| **Improper output handling** | Model output is displayed, never evaluated, and never used to build a query. |
+| **Excessive agency** | The entire tool surface is read-only and enumerable. There is no shell, no file access, no write path. |
+| **Data and model poisoning** | The importer validates every row and rejects malformed periods, types, values, and contradictory units, so bad data is refused at the ingestion boundary rather than served later. |
+| **Unbounded consumption** | Iterations, timeouts, retries, and response size are all capped, and token usage is recorded per answer. |
+| **Misinformation** | The central design constraint: retrieval decides every fact, and an unresolvable request returns a structured error instead of a plausible sentence. |
+| **Vector and embedding weaknesses** | Not applicable. There are no embeddings, deliberately — see below. |
+
+### What is not built
+
+Honest gaps, not oversights: there is no input classifier for jailbreak
+attempts, no output moderation pass, no per-user rate limiting, and no
+authentication — the last excluded by scope. If untrusted or user-generated text
+ever enters the corpus, indirect prompt injection becomes the first thing to
+address, and the place to address it is the gateway, which already sits between
+the provider and the tools.
+
 ## Future improvements
 
-Deliberately excluded from this build, with the path each would take:
+Grouped by what each would buy. Everything below is deliberately absent from
+this build; the point of listing it is that the current structure has a place
+for each one.
+
+### Evaluation and model economics
+
+- **An evaluation harness.** The mock provider makes behavior deterministic, but
+  determinism is not quality: nothing here scores whether a *live* model picks
+  the right tool or reads a number correctly. The next step is a fixed question
+  set with expected tool sequences and expected figures, scored per model — tool
+  choice and factual accuracy graded separately, since a wrong tool and a
+  misread value fail differently. The trace already recorded on every answer is
+  the natural input to that grader.
+- **Latency, quality, and cost as one decision.** The gateway already records
+  per-answer duration, token counts, and iteration count, so the missing piece
+  is comparison rather than instrumentation. With an eval set in place, model
+  choice becomes measured — a smaller model may resolve a ticker perfectly while
+  a larger one is only worth its cost on multi-step questions, and that is a
+  per-route decision rather than a global one.
+- **Provider portability.** The provider interface is narrow on purpose. Running
+  the same contract against Bedrock, Vertex AI, or a self-hosted model is an
+  adapter, not a refactor, which is what makes an availability or price change
+  survivable.
+
+### Agent runtime
+
+- **Harness choice.** The tool loop here is hand-rolled precisely because its
+  guardrails are the interesting part. The alternative is an SDK-provided runner
+  or a managed agent runtime, which removes loop code at the cost of controlling
+  retry, iteration, and trace semantics directly. The provider-independent
+  contract means that swap stays local to `ai_gateway/`.
+- **Context compression.** Today an oversized tool result is truncated at a size
+  bound and flagged. A longer conversation needs real strategy — summarizing
+  earlier turns, dropping superseded tool results, or letting the provider
+  compact its own history — and the turn model in `contracts.py` is where that
+  would live.
+
+### Data pipeline and freshness
+
+- **Scheduled ingestion.** The importer is a command today. In production it
+  becomes a scheduled job with a freshness SLA per company and KPI, publishing a
+  completion event so downstream consumers know a QTD snapshot advanced. The
+  upsert is already idempotent, which is the property that makes retries and
+  replays safe.
+- **Late and corrected snapshots.** QTD updates at most daily, so streaming is
+  the wrong shape. What matters instead is handling a late or restated snapshot
+  without losing the earlier one — the source identity already keeps every
+  snapshot rather than overwriting, so the history of what was believed when is
+  preserved.
+
+### Platform
 
 - **Authentication and entitlements.** Add an identity provider in front of the
   API, carry the subject through the gateway into the audit rows, and filter
@@ -386,13 +478,31 @@ Deliberately excluded from this build, with the path each would take:
   not latency, is the constraint at this size.
 - **Pagination.** Response bounds are in place, but a larger dataset needs cursor
   pagination on search and history.
-- **Charts.** Worth adding when a question is genuinely better answered by a
-  shape than a column of numbers, not before.
 - **CI/CD, rate limits, production monitoring.** The checks in this README are
   the pipeline definition; structured JSON logs are ready for a collector, and
   the audit table is ready to be a metrics source.
 - **A separately deployed gateway.** The interface is already narrow enough that
   this becomes a transport change rather than a rewrite.
+
+### Considered and deliberately not built
+
+- **Retrieval-augmented generation.** RAG earns its place over unstructured text
+  where the answer must be found. Here the corpus is 2,000 rows of typed numeric
+  facts with exact keys, so a lookup is both cheaper and correct by construction.
+  Retrieving numbers by semantic similarity would reintroduce exactly the failure
+  this system is built to prevent: a plausible figure attached to the wrong
+  company or quarter.
+- **A vector database.** Same reasoning, plus an operational one — it would be a
+  second store to keep consistent with PostgreSQL for no gain at this size. The
+  one honest use is fuzzy *name* resolution: embedding company and KPI names so
+  "streaming company" surfaces IGC as a suggestion. That belongs in the
+  suggestion layer, which never auto-resolves, so a near-miss stays a candidate
+  the caller must confirm rather than an answer.
+- **Real-time streaming.** QTD snapshots update at most daily. A stream would add
+  moving parts to deliver data that does not move that fast; a scheduled pipeline
+  with a freshness signal is the honest shape.
+- **Charts.** Worth adding when a question is genuinely better answered by a
+  shape than a column of numbers, not before.
 
 ## Use of AI tools
 
