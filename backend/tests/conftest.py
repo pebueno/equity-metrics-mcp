@@ -25,7 +25,7 @@ SKIP_REASON = (
 )
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
-SAMPLE_CSV = REPO_ROOT / "kpi_sample_2000__282_29__281_29.csv"
+SAMPLE_CSV = REPO_ROOT / "kpi_sample.csv"
 EXPECTED_ESTIMATE_COUNT = 2000
 
 

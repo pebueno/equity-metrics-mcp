@@ -29,7 +29,7 @@ services:
       IMPORT_ON_START: ${IMPORT_ON_START:-true}
       CSV_PATH: /data/kpi_sample.csv
     volumes:
-      - ./kpi_sample_2000__282_29__281_29.csv:/data/kpi_sample.csv:ro
+      - ./kpi_sample.csv:/data/kpi_sample.csv:ro
     depends_on:
       db:
         condition: service_healthy
