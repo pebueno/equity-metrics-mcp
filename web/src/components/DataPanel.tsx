@@ -1,3 +1,5 @@
+import type { ReactElement } from 'react';
+
 import type {
   CompanyKpis,
   CompanySearchResult,
@@ -5,6 +7,12 @@ import type {
   QtdEstimate,
   ToolPayloadItem,
 } from '../types';
+import {
+  asCompanyKpis,
+  asCompanySearchResult,
+  asHistoricalEstimates,
+  asQtdEstimate,
+} from './guards';
 
 /**
  * Renders the tool payloads behind an answer as tables.
@@ -13,24 +21,32 @@ import type {
  * check the sentence against the data without a second request.
  */
 export default function DataPanel({ items }: { items: ToolPayloadItem[] }) {
-  const rendered = items.map((item, index) => renderItem(item, index)).filter(Boolean);
+  const rendered = items.map(renderItem).filter((node) => node !== null);
   if (rendered.length === 0) {
     return null;
   }
   return <div className="data-panel">{rendered}</div>;
 }
 
-function renderItem(item: ToolPayloadItem, index: number) {
+function renderItem(item: ToolPayloadItem, index: number): ReactElement | null {
   const key = `${item.tool}-${index}`;
   switch (item.tool) {
-    case 'get_qtd_estimate':
-      return <QtdCard key={key} value={item.data as unknown as QtdEstimate} />;
-    case 'get_kpi_estimates':
-      return <HistoryTable key={key} value={item.data as unknown as HistoricalEstimates} />;
-    case 'list_company_kpis':
-      return <KpiTable key={key} value={item.data as unknown as CompanyKpis} />;
-    case 'search_companies':
-      return <CompanyTable key={key} value={item.data as unknown as CompanySearchResult} />;
+    case 'get_qtd_estimate': {
+      const value = asQtdEstimate(item.data);
+      return value && <QtdCard key={key} value={value} />;
+    }
+    case 'get_kpi_estimates': {
+      const value = asHistoricalEstimates(item.data);
+      return value && <HistoryTable key={key} value={value} />;
+    }
+    case 'list_company_kpis': {
+      const value = asCompanyKpis(item.data);
+      return value && <KpiTable key={key} value={value} />;
+    }
+    case 'search_companies': {
+      const value = asCompanySearchResult(item.data);
+      return value && <CompanyTable key={key} value={value} />;
+    }
     default:
       return null;
   }
