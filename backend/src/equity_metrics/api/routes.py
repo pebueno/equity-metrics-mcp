@@ -14,8 +14,10 @@ from equity_metrics.api.deps import get_session
 from equity_metrics.db.repositories import DEFAULT_SEARCH_LIMIT, MAX_SEARCH_LIMIT
 from equity_metrics.domain.schemas import (
     CompanyKpis,
+    CompanyOverview,
     CompanySearchResult,
     HistoricalEstimates,
+    KpiSummary,
     QtdEstimate,
     SectorSummary,
 )
@@ -41,6 +43,18 @@ def get_companies(
 ) -> CompanySearchResult:
     """Search companies by name, ticker, or sector."""
     return kpi_service.search_companies(session, query=query, sector=sector, limit=limit)
+
+
+@router.get("/kpis", response_model=list[KpiSummary])
+def get_kpis(session: SessionDep) -> list[KpiSummary]:
+    """List every KPI in the dataset with its unit."""
+    return kpi_service.list_kpis(session)
+
+
+@router.get("/companies/{company}/overview", response_model=CompanyOverview)
+def get_company_overview(company: str, session: SessionDep) -> CompanyOverview:
+    """Return every KPI for a company with its history and latest QTD snapshot."""
+    return kpi_service.get_company_overview(session, company)
 
 
 @router.get("/companies/{company}/kpis", response_model=CompanyKpis)

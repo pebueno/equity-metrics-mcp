@@ -27,12 +27,15 @@ from equity_metrics.domain.normalization import (
 )
 from equity_metrics.domain.schemas import (
     CompanyKpis,
+    CompanyOverview,
     CompanySearchResult,
     CompanySummary,
     EstimatePoint,
     HistoricalEstimates,
+    KpiOverview,
     KpiSummary,
     QtdEstimate,
+    QtdPoint,
     SectorSummary,
 )
 
@@ -143,6 +146,59 @@ def list_company_kpis(session: Session, query: str) -> CompanyKpis:
     return CompanyKpis(
         company=_summarize(company),
         kpis=[KpiSummary(kpi=kpi.name, unit=kpi.unit) for kpi in kpis],
+    )
+
+
+def list_kpis(session: Session) -> list[KpiSummary]:
+    """Return every KPI the dataset defines, with its unit."""
+    return [KpiSummary(kpi=kpi.name, unit=kpi.unit) for kpi in repositories.list_all_kpis(session)]
+
+
+def get_company_overview(session: Session, query: str) -> CompanyOverview:
+    """Return every KPI a company reports with its history and latest QTD snapshot.
+
+    One call instead of one per KPI, which is what a time-constrained reader and
+    an agent both want as an opening move.
+    """
+    company = resolve_company(session, query)
+    kpis = repositories.list_kpis_for_company(session, company.id)
+
+    history: dict[int, list[EstimatePoint]] = {}
+    for estimate in repositories.list_historical_for_company(session, company.id):
+        history.setdefault(estimate.kpi_id, []).append(
+            EstimatePoint(
+                period=estimate.period,
+                period_start=estimate.period_start,
+                period_end=estimate.period_end,
+                value=estimate.value,
+                unit=estimate.kpi.unit,
+            )
+        )
+
+    snapshots: dict[int, QtdPoint] = {}
+    for estimate in repositories.list_latest_qtd_for_company(session, company.id):
+        if estimate.as_of is None:  # pragma: no cover - a check constraint forbids this
+            continue
+        snapshots[estimate.kpi_id] = QtdPoint(
+            period=estimate.period,
+            period_start=estimate.period_start,
+            period_end=estimate.period_end,
+            value=estimate.value,
+            unit=estimate.kpi.unit,
+            as_of=estimate.as_of,
+        )
+
+    return CompanyOverview(
+        company=_summarize(company),
+        kpis=[
+            KpiOverview(
+                kpi=kpi.name,
+                unit=kpi.unit,
+                history=history.get(kpi.id, []),
+                qtd=snapshots.get(kpi.id),
+            )
+            for kpi in kpis
+        ],
     )
 
 

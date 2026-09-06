@@ -81,6 +81,37 @@ class HistoricalEstimates(_Model):
     estimates: list[EstimatePoint]
 
 
+class QtdPoint(_Model):
+    """A quarter-to-date snapshot without the company repeated on every row."""
+
+    period: str
+    period_start: dt.date
+    period_end: dt.date
+    value: Decimal
+    unit: str
+    as_of: dt.date
+
+    @field_serializer("value")
+    def _serialize_value(self, value: Decimal) -> str:
+        return format_decimal(value)
+
+
+class KpiOverview(_Model):
+    """One KPI for a company: its full history and its latest QTD snapshot."""
+
+    kpi: str
+    unit: str
+    history: list[EstimatePoint]
+    qtd: QtdPoint | None
+
+
+class CompanyOverview(_Model):
+    """Everything published for one company, in a single response."""
+
+    company: CompanySummary
+    kpis: list[KpiOverview]
+
+
 class QtdEstimate(_Model):
     """The most recent quarter-to-date snapshot for a company/KPI pair."""
 

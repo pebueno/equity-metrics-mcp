@@ -128,3 +128,43 @@ def test_invalid_period_returns_400(client: TestClient) -> None:
 
     assert response.status_code == 400
     assert response.json()["code"] == "invalid_period"
+
+
+def test_lists_every_kpi_with_its_unit(client: TestClient) -> None:
+    response = client.get("/api/kpis")
+
+    assert response.status_code == 200
+    body = response.json()
+    assert [item["kpi"] for item in body] == [
+        "ASP ($)",
+        "Global Net Added Subscribers",
+        "Total Revenue ($MM)",
+        "U.S. Net Added Subscribers",
+        "Units Sold",
+    ]
+    assert {"kpi": "Units Sold", "unit": "units"} in body
+
+
+def test_company_overview_returns_history_and_qtd_for_every_kpi(client: TestClient) -> None:
+    response = client.get("/api/companies/acme/overview")
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["company"]["ticker"] == "ACME"
+    assert len(body["kpis"]) == 5
+
+    asp = next(item for item in body["kpis"] if item["kpi"] == "ASP ($)")
+    assert asp["unit"] == "$"
+    assert len(asp["history"]) == 16
+    assert [point["period"] for point in asp["history"]] == sorted(
+        point["period"] for point in asp["history"]
+    )
+    # The QTD snapshot is the latest date, not the largest value.
+    assert asp["qtd"]["as_of"] == "2026-03-15"
+    assert asp["qtd"]["value"] == "164.22"
+    assert asp["qtd"]["period"] == "2026Q1"
+
+
+def test_company_overview_resolves_deterministically(client: TestClient) -> None:
+    assert client.get("/api/companies/Cloud/overview").status_code == 409
+    assert client.get("/api/companies/Nonexistent/overview").status_code == 404

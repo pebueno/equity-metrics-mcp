@@ -140,6 +140,35 @@ def find_latest_qtd_estimate(session: Session, *, company_id: int, kpi_id: int) 
     return session.scalar(statement)
 
 
+def list_all_kpis(session: Session) -> Sequence[KpiDefinition]:
+    """Return every KPI definition, ordered by name."""
+    return session.scalars(select(KpiDefinition).order_by(KpiDefinition.name)).all()
+
+
+def list_historical_for_company(session: Session, company_id: int) -> Sequence[Estimate]:
+    """Every historical estimate a company reports, grouped by KPI then period."""
+    statement = (
+        select(Estimate)
+        .where(Estimate.company_id == company_id, Estimate.estimate_type == "historical")
+        .order_by(Estimate.kpi_id, Estimate.period)
+    )
+    return session.scalars(statement).all()
+
+
+def list_latest_qtd_for_company(session: Session, company_id: int) -> Sequence[Estimate]:
+    """The most recent QTD snapshot per KPI, chosen by greatest `as_of`.
+
+    DISTINCT ON keeps this to a single indexed pass instead of one query per KPI.
+    """
+    statement = (
+        select(Estimate)
+        .where(Estimate.company_id == company_id, Estimate.estimate_type == "qtd")
+        .distinct(Estimate.kpi_id)
+        .order_by(Estimate.kpi_id, Estimate.as_of.desc(), Estimate.id.desc())
+    )
+    return session.scalars(statement).all()
+
+
 def _bound(limit: int) -> int:
     """Clamp a caller-supplied limit into the supported range."""
     return max(1, min(limit, MAX_SEARCH_LIMIT))
