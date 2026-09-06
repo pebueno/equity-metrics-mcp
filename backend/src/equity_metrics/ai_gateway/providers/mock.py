@@ -223,7 +223,6 @@ def _estimate_call(call_id: str, question: str, ticker: str, kpi: str) -> ToolCa
 
 
 def _periods(question: str) -> list[str]:
-    """Extract the fiscal periods a question names, in the order they appear."""
     found: list[str] = []
     for year, quarter in PERIOD_PATTERN.findall(question):
         period = f"{year}Q{quarter}"
@@ -411,7 +410,6 @@ def _unsupported(question: str) -> str | None:
 
 
 def _tickers(question: str) -> list[str]:
-    """Every ticker-shaped word in the question, in order."""
     return [
         match.group()
         for match in TICKER_PATTERN.finditer(question)
@@ -420,7 +418,6 @@ def _tickers(question: str) -> list[str]:
 
 
 def _ticker(question: str) -> str | None:
-    """The first ticker-shaped word in the question, if any."""
     found = _tickers(question)
     return found[0] if found else None
 

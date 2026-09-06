@@ -44,7 +44,6 @@ MAX_REQUESTED_PERIODS = 40
 
 
 def list_sectors(session: Session) -> list[SectorSummary]:
-    """Return every sector with its company count."""
     return [
         SectorSummary(sector=name, company_count=count)
         for name, count in repositories.list_sectors(session)
@@ -140,7 +139,6 @@ def resolve_kpi(session: Session, query: str, *, company: Company | None = None)
 
 
 def list_company_kpis(session: Session, query: str) -> CompanyKpis:
-    """Return the resolved company and the KPIs it reports."""
     company = resolve_company(session, query)
     kpis = repositories.list_kpis_for_company(session, company.id)
     return CompanyKpis(
@@ -150,7 +148,6 @@ def list_company_kpis(session: Session, query: str) -> CompanyKpis:
 
 
 def list_kpis(session: Session) -> list[KpiSummary]:
-    """Return every KPI the dataset defines, with its unit."""
     return [KpiSummary(kpi=kpi.name, unit=kpi.unit) for kpi in repositories.list_all_kpis(session)]
 
 

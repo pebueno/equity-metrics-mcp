@@ -21,7 +21,6 @@ def normalize_name(value: str) -> str:
 
 
 def normalize_ticker(value: str) -> str:
-    """Return the canonical uppercase ticker form."""
     return collapse_whitespace(value).upper()
 
 

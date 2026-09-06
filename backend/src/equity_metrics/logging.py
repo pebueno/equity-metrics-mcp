@@ -21,8 +21,6 @@ _STANDARD_FIELDS = frozenset(logging.LogRecord("", 0, "", 0, "", None, None).__d
 
 
 class JsonFormatter(logging.Formatter):
-    """Renders a log record as a single JSON line."""
-
     def format(self, record: logging.LogRecord) -> str:
         payload: dict[str, Any] = {
             "timestamp": dt.datetime.fromtimestamp(record.created, dt.UTC).isoformat(),

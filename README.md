@@ -81,7 +81,7 @@ adjust; `.env` is never committed.
 
 ```bash
 cd backend
-equity-import ../kpi_sample_2000__282_29__281_29.csv
+equity-import ../kpi_sample.csv
 ```
 
 Each row is validated before it is stored: the fiscal period must match
@@ -397,8 +397,7 @@ Deliberately excluded from this build, with the path each would take:
 ## Use of AI tools
 
 Implementation of this repository was AI-assisted throughout, using Claude Code
-(Claude Opus 5), working milestone by milestone against a written plan with
-review and acceptance at each step.
+(Claude Opus 5), built in reviewed stages rather than in one pass.
 
 ### Where AI output was relied on
 

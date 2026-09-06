@@ -22,6 +22,5 @@ def get_session(request: Request) -> Iterator[Session]:
 
 
 def get_gateway(request: Request) -> AiGateway:
-    """Return the process-wide gateway built for this application."""
     gateway: AiGateway = request.app.state.gateway
     return gateway

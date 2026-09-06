@@ -34,7 +34,6 @@ def find_company_by_ticker(session: Session, ticker: str) -> Company | None:
 
 
 def find_company_by_normalized_name(session: Session, normalized_name: str) -> Company | None:
-    """Look up a company by its normalized name."""
     return session.scalar(select(Company).where(Company.normalized_name == normalized_name))
 
 
@@ -66,7 +65,6 @@ def search_companies(
 
 
 def find_kpi_by_normalized_name(session: Session, normalized_name: str) -> KpiDefinition | None:
-    """Look up a KPI definition by its normalized name."""
     return session.scalar(
         select(KpiDefinition).where(KpiDefinition.normalized_name == normalized_name)
     )
@@ -141,12 +139,10 @@ def find_latest_qtd_estimate(session: Session, *, company_id: int, kpi_id: int) 
 
 
 def list_all_kpis(session: Session) -> Sequence[KpiDefinition]:
-    """Return every KPI definition, ordered by name."""
     return session.scalars(select(KpiDefinition).order_by(KpiDefinition.name)).all()
 
 
 def list_historical_for_company(session: Session, company_id: int) -> Sequence[Estimate]:
-    """Every historical estimate a company reports, grouped by KPI then period."""
     statement = (
         select(Estimate)
         .where(Estimate.company_id == company_id, Estimate.estimate_type == "historical")

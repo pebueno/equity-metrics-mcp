@@ -324,11 +324,10 @@ class TestProviderSelection:
 
 
 class TestQuestionUnderstanding:
-    """Phrasings the brief uses, and the questions the planner must decline."""
+    """Question phrasings the planner must handle, and those it must decline."""
 
     @pytest.mark.anyio
     async def test_answers_the_brief_example_question(self, gateway: AiGateway) -> None:
-        # The example from the assignment, word for word.
         response = await gateway.answer("What's IGC's QTD subscriber growth this quarter?")
 
         assert [entry.tool for entry in response.trace] == ["get_qtd_estimate"]
