@@ -47,3 +47,6 @@ logs/
 *.swo
 .DS_Store
 Thumbs.db
+
+# Private working notes, never part of the submission
+AI-COLLABORATION-NOTES.md

@@ -396,67 +396,59 @@ Deliberately excluded from this build, with the path each would take:
 
 ## Use of AI tools
 
-This project was built with Claude Code (Claude Opus 5). The split below is
-what the assignment asks for: where AI output was relied on, and where the
-problem needed deliberate design instead.
+Implementation of this repository was AI-assisted throughout, using Claude Code
+(Claude Opus 5), working milestone by milestone against a written plan with
+review and acceptance at each step.
 
-### Where I relied on AI
+### Where AI output was relied on
 
-- **Mechanical and repetitive code.** Pydantic and SQLAlchemy model definitions,
-  the Alembic migration body, CSS, the React component scaffolding, and the bulk
-  of the test bodies once the cases were chosen.
-- **Boilerplate and configuration.** Dockerfiles, Compose, tool configuration,
-  and the first drafts of this README's reference sections.
-- **API surface recall.** The MCP Python SDK changed shape in 2.x; rather than
-  trusting recall, the actual `MCPServer` API was probed in a scratch script
-  before any code was written against it.
-- **Breadth of test cases.** Once a behavior was specified, AI was good at
-  enumerating the edge cases around it.
+Mechanical and repetitive work: model and schema definitions, the migration
+body, CSS and component scaffolding, Dockerfiles and tool configuration, and
+test bodies once the cases to cover had been chosen. AI was also effective at
+enumerating edge cases around an already-specified behavior.
 
-### Where the design was deliberate
+Where recall was not trusted: the MCP Python SDK changed shape in 2.x, so the
+actual `MCPServer` API was probed in a scratch script before any code was
+written against it, rather than assuming the older `FastMCP` interface.
 
-These were decided first and the code was written to match. They are the places
-where accepting a plausible-looking default would have produced a worse system.
+### Where deliberate design was required
 
-- **Tool granularity and parameters.** Four tools that mirror how an analyst
-  actually works — find the company, see what it reports, read the history, read
-  the current quarter — rather than one generic `query` tool. Each takes small,
-  explicit arguments so the model has little room to be creative.
-- **Refusing to resolve ambiguity.** The most consequential decision here. A
-  substring match is never promoted to a resolution *even when only one candidate
-  exists*, because a silently wrong company is the one failure an investor cannot
-  detect. This costs one extra round trip and is worth it.
-- **The error contract.** Recoverable failures are tool results with `isError`, a
-  machine-readable code, and bounded suggestions — not protocol errors. This is
-  what makes the agent able to correct itself, and it was designed before the
-  tools were written.
-- **The audit path.** Writing the record in a `finally` block through its *own*
-  session, so a rolled-back read cannot discard the audit and an audit failure
-  cannot corrupt a good answer. The correlation ID scope that ties one question
-  to its calls was designed for this.
-- **Security boundary between the model and the data.** The gateway may invoke
-  tools but never touches the database; all SQL lives in one module and is
-  parameterized; `LIKE` wildcards in user input are escaped; audit arguments are
-  redacted and bounded.
-- **The loop guardrails.** Iteration ceiling, per-call timeout inside a total
-  budget, response-size bound, and retries restricted to transient faults. Each
-  exists because of a specific failure mode, listed in the table above.
-- **Schema and index design.** `NUMERIC` not float; the `NULLS NOT DISTINCT`
-  unique index without which every re-import would duplicate all 1,600 historical
-  rows; a partial index restricted to QTD rows.
-- **"Latest QTD" semantics.** Greatest `as_of`, never greatest value. In this
-  dataset the two differ, so a plausible `MAX(value)` implementation would return
-  a wrong number that still looks right.
+These were settled before the code was written, and are the points where
+accepting a plausible-looking default would have produced a worse system. Each
+is documented with its reasoning in [Decisions](#decisions) and
+[LLM tool-calling failure modes](#llm-tool-calling-failure-modes):
 
-### What I verified rather than assumed
+- **Tool granularity** — four task-shaped tools rather than one generic `query`
+  tool, each with small explicit arguments.
+- **Refusing to resolve ambiguity** — a substring match is never promoted to a
+  resolution, even when unique, because a silently wrong company is the failure
+  an investor cannot detect.
+- **The error contract** — recoverable failures as tool results with a
+  machine-readable code and bounded suggestions, not protocol errors.
+- **The audit path** — written in a `finally` block through its own session, so
+  a rolled-back read cannot discard the audit and an audit failure cannot
+  corrupt a good answer.
+- **Security boundary between model and data** — the gateway invokes tools but
+  never queries the database; all SQL is in one module and parameterized; `LIKE`
+  wildcards are escaped; audit arguments are redacted and bounded.
+- **Loop guardrails** — iteration ceiling, per-call timeout inside a total
+  budget, response-size bound, retries restricted to transient faults.
+- **Schema and index design** — `NUMERIC` rather than float, and the
+  `NULLS NOT DISTINCT` unique index without which every re-import would
+  duplicate all 1,600 historical rows.
+- **"Latest QTD" semantics** — greatest `as_of`, never greatest value. The two
+  differ in this dataset, so a plausible `MAX(value)` implementation would
+  return a wrong number that still looks right.
 
-AI output was checked against a running system, not just a passing test suite:
-the stack was rebuilt from an empty volume, the MCP server was driven over stdio
-by a real client, and questions were replayed through the live API while reading
-the audit table. Two defects found this way, both invisible to the tests that
-existed at the time: the mock planner ignored a named fiscal period and answered
-with the wrong quarter, and it answered a two-company comparison for one company
-only. Both are now fixed and covered by tests.
+### Verification
 
-The sample dataset and the product requirements are not mine and not generated;
-no KPI value in this repository was produced by a model.
+AI output was checked against a running system rather than only a passing test
+suite: the stack was rebuilt from an empty volume, the MCP server was driven
+over stdio by a real client, and questions were replayed through the live API
+while reading the audit table. Two defects surfaced that way, both invisible to
+the tests that existed at the time — a named fiscal period was ignored so the
+wrong quarter was returned, and a two-company comparison was answered for one
+company. Both are fixed and covered by tests.
+
+The dataset and the product requirements were provided, not generated. No KPI
+value in this repository was produced by a model.
