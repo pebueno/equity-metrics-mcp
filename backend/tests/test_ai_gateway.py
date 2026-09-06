@@ -321,3 +321,121 @@ class TestProviderSelection:
         # and therefore no test can make a network call.
         with pytest.raises(ProviderConfigurationError):
             build_provider(Settings(llm_provider="anthropic", llm_api_key=None))
+
+
+class TestQuestionUnderstanding:
+    """Phrasings the brief uses, and the questions the planner must decline."""
+
+    @pytest.mark.anyio
+    async def test_answers_the_brief_example_question(self, gateway: AiGateway) -> None:
+        # The example from the assignment, word for word.
+        response = await gateway.answer("What's IGC's QTD subscriber growth this quarter?")
+
+        assert [entry.tool for entry in response.trace] == ["get_qtd_estimate"]
+        assert response.trace[0].arguments == {
+            "ticker": "IGC",
+            "kpi": "Global Net Added Subscribers",
+        }
+        assert "quarter-to-date" in response.answer
+        assert "as of" in response.answer
+
+    @pytest.mark.anyio
+    @pytest.mark.parametrize(
+        "question",
+        [
+            "ACME ASP this quarter",
+            "ACME ASP right now",
+            "what is ACME ASP currently",
+            "ACME quarter-to-date ASP",
+            "ACME ASP QTD",
+        ],
+    )
+    async def test_recognizes_quarter_to_date_phrasings(
+        self, gateway: AiGateway, question: str
+    ) -> None:
+        response = await gateway.answer(question)
+
+        assert [entry.tool for entry in response.trace] == ["get_qtd_estimate"]
+
+    @pytest.mark.anyio
+    @pytest.mark.parametrize(
+        ("question", "expected"),
+        [
+            ("IGC subscriber growth", "Global Net Added Subscribers"),
+            ("IGC global subscribers", "Global Net Added Subscribers"),
+            ("IGC U.S. subscribers", "U.S. Net Added Subscribers"),
+            ("IGC us subscriber adds", "U.S. Net Added Subscribers"),
+            ("IGC total revenue", "Total Revenue ($MM)"),
+            ("IGC average selling price", "ASP ($)"),
+            ("IGC units sold", "Units Sold"),
+        ],
+    )
+    async def test_maps_kpi_wording_to_the_stored_name(
+        self, gateway: AiGateway, question: str, expected: str
+    ) -> None:
+        response = await gateway.answer(question)
+
+        assert response.trace[0].arguments["kpi"] == expected
+
+    @pytest.mark.anyio
+    async def test_honours_a_named_fiscal_period(self, gateway: AiGateway) -> None:
+        response = await gateway.answer("What was ACME revenue in 2023Q2?")
+
+        assert response.trace[0].tool == "get_kpi_estimates"
+        assert response.trace[0].arguments["periods"] == ["2023Q2"]
+        assert "2023Q2" in response.answer
+        # The full history must not be dumped in place of the quarter asked for.
+        assert "2025Q4" not in response.answer
+
+    @pytest.mark.anyio
+    async def test_honours_several_named_periods(self, gateway: AiGateway) -> None:
+        response = await gateway.answer("ACME revenue for 2023Q1 and 2023Q2")
+
+        assert response.trace[0].arguments["periods"] == ["2023Q1", "2023Q2"]
+
+    @pytest.mark.anyio
+    async def test_a_named_period_wins_over_quarter_to_date_wording(
+        self, gateway: AiGateway
+    ) -> None:
+        # 2023Q2 is a closed quarter, so a QTD snapshot cannot answer it.
+        response = await gateway.answer("ACME revenue in 2023Q2 quarter to date")
+
+        assert response.trace[0].tool == "get_kpi_estimates"
+
+    @pytest.mark.anyio
+    async def test_reports_a_period_that_has_no_estimates(self, gateway: AiGateway) -> None:
+        response = await gateway.answer("ACME revenue in 2030Q1")
+
+        assert response.trace[0].arguments["periods"] == ["2030Q1"]
+        assert response.trace[0].status == "error"
+        assert response.trace[0].error_code == "no_data"
+        # It must say there is nothing rather than show a different quarter.
+        assert "No historical estimates" in response.answer
+        assert "2025Q4" not in response.answer
+
+    @pytest.mark.anyio
+    @pytest.mark.parametrize(
+        "question",
+        [
+            "Compare ACME and CLD9 revenue",
+            "ACME versus CLD9 revenue",
+            "what is the difference between ACME and CLD9 revenue",
+            "ACME CLD9 revenue",
+        ],
+    )
+    async def test_declines_a_multi_company_question(
+        self, gateway: AiGateway, question: str
+    ) -> None:
+        response = await gateway.answer(question)
+
+        # Answering for one company would read as an answer about both.
+        assert response.trace == ()
+        assert "one company at a time" in response.answer
+
+    @pytest.mark.anyio
+    async def test_a_single_company_question_is_not_mistaken_for_a_comparison(
+        self, gateway: AiGateway
+    ) -> None:
+        response = await gateway.answer("What's IGC's QTD subscriber growth this quarter?")
+
+        assert response.trace != ()

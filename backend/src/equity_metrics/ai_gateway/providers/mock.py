@@ -34,13 +34,36 @@ KPI_KEYWORDS: tuple[tuple[str, str], ...] = (
     ("units sold", "Units Sold"),
     ("units", "Units Sold"),
     ("global net added subscribers", "Global Net Added Subscribers"),
-    ("global subscribers", "Global Net Added Subscribers"),
+    ("global subscriber", "Global Net Added Subscribers"),
     ("u.s. net added subscribers", "U.S. Net Added Subscribers"),
-    ("us subscribers", "U.S. Net Added Subscribers"),
-    ("subscribers", "Global Net Added Subscribers"),
+    ("u.s. subscriber", "U.S. Net Added Subscribers"),
+    ("us subscriber", "U.S. Net Added Subscribers"),
+    ("domestic subscriber", "U.S. Net Added Subscribers"),
+    # Longest match wins, so the qualified forms above are tried first and this
+    # bare prefix catches "subscriber", "subscribers", and "subscriber growth".
+    ("subscriber", "Global Net Added Subscribers"),
 )
 
-QTD_KEYWORDS = ("qtd", "quarter-to-date", "quarter to date", "current quarter", "so far this")
+QTD_KEYWORDS = (
+    "qtd",
+    "quarter-to-date",
+    "quarter to date",
+    "current quarter",
+    "this quarter",
+    "so far this",
+    "right now",
+    "currently",
+    "to date",
+)
+
+# An explicit fiscal period in the question, e.g. "revenue in 2023Q2".
+PERIOD_PATTERN = re.compile(r"\b(\d{4})\s*[qQ]([1-4])\b")
+
+# Asking about several companies at once, which no single tool can answer.
+COMPARISON_WORDS = ("compare", "versus", " vs ", " vs. ", "difference between")
+
+# Beyond a handful of named periods it is simpler to return the full history.
+MAX_REQUESTED_PERIODS = 8
 
 # Words that carry no company signal, dropped before searching.
 STOPWORDS = frozenset(
@@ -121,6 +144,11 @@ class MockProvider:
         last_results = _last_results(turns)
 
         if last_results is None:
+            unsupported = _unsupported(question)
+            if unsupported is not None:
+                # Answering for one company would look like an answer to a
+                # question about two. Say what is possible instead.
+                return _completion(text=unsupported)
             return _completion(tool_calls=_plan(question))
 
         recovery = _recover(last_results)
@@ -177,15 +205,31 @@ def _plan(question: str) -> tuple[ToolCallRequest, ...]:
 
 
 def _estimate_call(call_id: str, question: str, ticker: str, kpi: str) -> ToolCallRequest:
-    """Pick the QTD tool or the history tool based on the question's wording."""
+    """Pick the QTD tool or the history tool, honouring any period the question names."""
+    periods = _periods(question)
     lowered = question.lower()
-    if any(keyword in lowered for keyword in QTD_KEYWORDS):
+
+    # A named fiscal period is a request for history, even alongside QTD wording:
+    # "2023Q2" is a closed quarter, so a quarter-to-date snapshot cannot answer it.
+    if not periods and any(keyword in lowered for keyword in QTD_KEYWORDS):
         return ToolCallRequest(
             id=call_id, name="get_qtd_estimate", arguments={"ticker": ticker, "kpi": kpi}
         )
-    return ToolCallRequest(
-        id=call_id, name="get_kpi_estimates", arguments={"ticker": ticker, "kpi": kpi}
-    )
+
+    arguments: dict[str, Any] = {"ticker": ticker, "kpi": kpi}
+    if periods:
+        arguments["periods"] = periods
+    return ToolCallRequest(id=call_id, name="get_kpi_estimates", arguments=arguments)
+
+
+def _periods(question: str) -> list[str]:
+    """Extract the fiscal periods a question names, in the order they appear."""
+    found: list[str] = []
+    for year, quarter in PERIOD_PATTERN.findall(question):
+        period = f"{year}Q{quarter}"
+        if period not in found:
+            found.append(period)
+    return found[:MAX_REQUESTED_PERIODS]
 
 
 def _recover(results: tuple[ToolCallResult, ...]) -> ToolCallRequest | None:
@@ -350,11 +394,35 @@ def _search_query(question: str) -> str:
     return " ".join(words) or question
 
 
-def _ticker(question: str) -> str | None:
-    for match in TICKER_PATTERN.finditer(question):
-        if match.group() not in NON_TICKER_WORDS:
-            return match.group()
+def _unsupported(question: str) -> str | None:
+    """Return a refusal when the question asks for something no tool can answer.
+
+    Only comparisons are detected, because they are the case where a partial
+    answer reads as a complete one.
+    """
+    lowered = f" {question.lower()} "
+    asks_to_compare = any(word in lowered for word in COMPARISON_WORDS)
+    if asks_to_compare or len(_tickers(question)) > 1:
+        return (
+            "I can only report one company at a time. Ask about each company "
+            "separately, for example by naming a single ticker per question."
+        )
     return None
+
+
+def _tickers(question: str) -> list[str]:
+    """Every ticker-shaped word in the question, in order."""
+    return [
+        match.group()
+        for match in TICKER_PATTERN.finditer(question)
+        if match.group() not in NON_TICKER_WORDS
+    ]
+
+
+def _ticker(question: str) -> str | None:
+    """The first ticker-shaped word in the question, if any."""
+    found = _tickers(question)
+    return found[0] if found else None
 
 
 def _kpi(question: str) -> str | None:
