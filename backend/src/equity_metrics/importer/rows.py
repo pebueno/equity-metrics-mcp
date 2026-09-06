@@ -84,13 +84,12 @@ def parse_row(raw: Mapping[str, str | None]) -> SourceRow:
             "estimate_type", f"expected one of {ESTIMATE_TYPES}, got {estimate_type!r}"
         )
 
-    period_start = _date(raw, "period_start", required=True)
-    period_end = _date(raw, "period_end", required=True)
-    assert period_start is not None and period_end is not None  # narrowed by required=True
+    period_start = _required_date(raw, "period_start")
+    period_end = _required_date(raw, "period_end")
     if period_end < period_start:
         raise RowValidationError("period_end", "period_end precedes period_start")
 
-    as_of = _date(raw, "as_of", required=False)
+    as_of = _optional_date(raw, "as_of")
     if estimate_type == "qtd" and as_of is None:
         raise RowValidationError("as_of", "as_of is required for qtd estimates")
 
@@ -127,11 +126,16 @@ def _decimal(raw: Mapping[str, str | None], field: str) -> Decimal:
     return value
 
 
-def _date(raw: Mapping[str, str | None], field: str, *, required: bool) -> dt.date | None:
+def _required_date(raw: Mapping[str, str | None], field: str) -> dt.date:
+    date = _optional_date(raw, field)
+    if date is None:
+        raise RowValidationError(field, "value is required")
+    return date
+
+
+def _optional_date(raw: Mapping[str, str | None], field: str) -> dt.date | None:
     text = collapse_whitespace(raw.get(field) or "")
     if not text:
-        if required:
-            raise RowValidationError(field, "value is required")
         return None
     try:
         return dt.date.fromisoformat(text)

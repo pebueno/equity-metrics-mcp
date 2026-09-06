@@ -37,6 +37,7 @@ def register_error_handlers(app: FastAPI) -> None:
 
     @app.exception_handler(DomainError)
     async def handle_domain_error(_: Request, exc: Exception) -> JSONResponse:
-        assert isinstance(exc, DomainError)  # registered only for DomainError
+        if not isinstance(exc, DomainError):
+            raise exc
         http_status = STATUS_BY_ERROR.get(type(exc), status.HTTP_400_BAD_REQUEST)
         return JSONResponse(status_code=http_status, content=asdict(to_payload(exc)))
